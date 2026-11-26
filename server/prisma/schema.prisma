@@ -1,0 +1,276 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  FARMER
+  VETERINARIAN
+  AUTHORITY
+}
+
+enum AnimalStatus {
+  ACTIVE
+  SICK
+  QUARANTINED
+  DECEASED
+  SOLD
+}
+
+enum CaseStatus {
+  REPORTED
+  UNDER_REVIEW
+  TRIAGED
+  UNDER_TREATMENT
+  RESOLVED
+  CLOSED
+}
+
+enum CasePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum MediaType {
+  IMAGE
+  AUDIO
+  DOCUMENT
+}
+
+enum FollowUpStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  MISSED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  fullName     String
+  phone        String?
+  role         UserRole  @default(FARMER)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  farms         Farm[]
+  reportedCases Case[]         @relation("FarmerCases")
+  assignedCases Case[]         @relation("VeterinarianCases")
+  observations  Observation[]
+  consultations Consultation[]
+  refreshTokens RefreshToken[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Farm {
+  id                 String   @id @default(cuid())
+  name               String
+  registrationNumber String?
+  location           String?
+  address            String?
+  latitude           Float?
+  longitude          Float?
+  ownerId            String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  owner   User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  animals Animal[]
+
+  @@index([ownerId])
+  @@index([location])
+  @@map("farms")
+}
+
+model Animal {
+  id                   String       @id @default(cuid())
+  tagNumber            String
+  name                 String?
+  species              String
+  breed                String?
+  gender               String?
+  dateOfBirth          DateTime?
+  approximateAgeMonths Int?
+  status               AnimalStatus @default(ACTIVE)
+  farmId               String
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  farm  Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  cases Case[]
+
+  @@unique([farmId, tagNumber])
+  @@index([farmId])
+  @@index([species])
+  @@index([status])
+  @@map("animals")
+}
+
+model Case {
+  id            String       @id @default(cuid())
+  caseNumber    String       @unique
+  title         String?
+  description   String?      @db.Text
+  status        CaseStatus   @default(REPORTED)
+  priority      CasePriority @default(MEDIUM)
+  animalId      String
+  farmerId      String
+  assignedVetId String?
+  closedAt      DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  animal        Animal        @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  farmer        User          @relation("FarmerCases", fields: [farmerId], references: [id], onDelete: Restrict)
+  assignedVet   User?         @relation("VeterinarianCases", fields: [assignedVetId], references: [id], onDelete: SetNull)
+  observations  Observation[]
+  triageReport  TriageReport?
+  consultations Consultation[]
+  followUps     FollowUp[]
+
+  @@index([caseNumber])
+  @@index([status])
+  @@index([priority])
+  @@index([farmerId])
+  @@index([assignedVetId])
+  @@index([animalId])
+  @@index([createdAt])
+  @@map("cases")
+}
+
+model Observation {
+  id               String   @id @default(cuid())
+  caseId           String
+  reporterId       String
+  symptoms         String[]
+  bodyTemperature  Float?
+  heartRate        Int?
+  respiratoryRate  Int?
+  generalCondition String?
+  notes            String?  @db.Text
+  recordedAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  case        Case              @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  reporter    User              @relation(fields: [reporterId], references: [id], onDelete: Restrict)
+  attachments MediaAttachment[]
+  followUps   FollowUp[]
+
+  @@index([caseId])
+  @@index([reporterId])
+  @@index([recordedAt])
+  @@map("observations")
+}
+
+model MediaAttachment {
+  id               String    @id @default(cuid())
+  observationId    String
+  mediaType        MediaType
+  storageKey       String
+  url              String?
+  originalFilename String
+  mimeType         String
+  fileSizeBytes    Int
+  metadata         Json?
+  createdAt        DateTime  @default(now())
+
+  observation Observation @relation(fields: [observationId], references: [id], onDelete: Cascade)
+
+  @@index([observationId])
+  @@index([mediaType])
+  @@map("media_attachments")
+}
+
+model TriageReport {
+  id                  String   @id @default(cuid())
+  caseId              String   @unique
+  urgencyCategory     String
+  confidenceScore     Float?
+  summary             String   @db.Text
+  potentialIndicators String[]
+  differentialNotes   String?  @db.Text
+  modelVersion        String   @default("vetguard-triage-v1.0")
+  isDisclaimed        Boolean  @default(true)
+  generatedAt         DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([urgencyCategory])
+  @@map("triage_reports")
+}
+
+model Consultation {
+  id                   String   @id @default(cuid())
+  caseId               String
+  veterinarianId       String
+  clinicalObservations String?  @db.Text
+  diagnosis            String?  @db.Text
+  treatmentPlan        String?  @db.Text
+  prescription         String?  @db.Text
+  notes                String?  @db.Text
+  conductedAt          DateTime @default(now())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  case         Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  veterinarian User @relation(fields: [veterinarianId], references: [id], onDelete: Restrict)
+
+  @@index([caseId])
+  @@index([veterinarianId])
+  @@index([conductedAt])
+  @@map("consultations")
+}
+
+model FollowUp {
+  id              String         @id @default(cuid())
+  caseId          String
+  observationId   String?
+  scheduledDate   DateTime
+  actualDate      DateTime?
+  status          FollowUpStatus @default(SCHEDULED)
+  notes           String?        @db.Text
+  recommendations String?        @db.Text
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  case        Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  observation Observation? @relation(fields: [observationId], references: [id], onDelete: SetNull)
+
+  @@index([caseId])
+  @@index([observationId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@map("follow_ups")
+}
+
+model RefreshToken {
+  id                  String    @id @default(cuid())
+  tokenHash           String    @unique
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt           DateTime
+  revokedAt           DateTime?
+  replacedByTokenHash String?
+  userAgent           String?
+  ipAddress           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}

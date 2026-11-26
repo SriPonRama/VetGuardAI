@@ -7,10 +7,25 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node server/index.js",
+    "server:dev": "node --watch server/index.js",
+    "prisma:validate": "prisma validate --schema=server/prisma/schema.prisma",
+    "prisma:generate": "prisma generate --schema=server/prisma/schema.prisma",
+    "test:backend": "node server/test-health.js",
+    "auth:seed": "node server/scripts/seed-authority.js",
+    "test:auth": "node server/test-auth.js"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.5",
     "framer-motion": "^13.4.0",
+    "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.46.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -23,6 +38,7 @@
     "autoprefixer": "^10.6.1",
     "oxlint": "^1.81.0",
     "postcss": "^8.5.28",
+    "prisma": "^6.19.3",
     "tailwindcss": "^3.4.19",
     "vite": "^8.3.0"
   }
